@@ -10,7 +10,7 @@ int rows[8] = {2, 7, 10, 6, 12, A5, A4, A2};
 
 #define __DEBUG__ false
 #define __SNAKE_TIMEOUT__ 350
-#define snake_length 1
+#define snake_length 20
 
 
 
@@ -178,14 +178,13 @@ class Square
     };
 };
 
-int __INIT__ = 0;
+int __DOT_INIT__ = 0;
 int __GAME_NUM__ = 0;
 vec2 origin[snake_length]={};
 vec2 direction;
 Square thesquare = Square();
 
 int square_counter = 0;
-// int __SQUARE_POINTS__ 4;
 
 float get_distance()
 {
@@ -225,12 +224,9 @@ void blink(vec2 v, int t)
   delay(t*.2);
 }
 
-void test_screen()
+void run_leds(int side)
 {
-  // Runs line animation to test LEDs
-  for(int side = 0; side < 4; side++)
-  {
-    for(int i = 0; i < 8; i++)
+  for(int i = 0; i < 8; i++)
     for(int j = 0; j < 8; j++)
     {
       if(side == 0) blink(vec2(i, j), 7);
@@ -238,7 +234,16 @@ void test_screen()
       else if(side == 1) blink(vec2(j, i), 7);
       else blink(vec2(j, 7-i), 7);
     }
+}
+
+void test_screen()
+{
+  // Runs line animation to test LEDs
+  for(int side = 0; side < 4; side++)
+  {
+    run_leds(side);
   }
+  delay(1500);
 }
 
 
@@ -249,11 +254,21 @@ vec2 get_uc(float x, float y)
    return vec2(x - 3.5, y - 3.5);
 }
 
+void next_level()
+{
+  __GAME_NUM__ = (__GAME_NUM__ + 1) % 4;
+}
 
-
-
-
-
+bool check_button(bool d=false)
+{
+  if(!__DEBUG__ && digitalRead(button)==1)
+  {
+    next_level();
+    if(d)delay(750);
+    return true;
+  }
+  return false;
+}
 // Visualizations
 
 void print_vector(vec2 v)
@@ -265,24 +280,61 @@ void print_vector(vec2 v)
 
 void level()
 {
-  float distance = get_distance();
-  float p = normalize_distance(distance);
-  float fp = floor(p*7);
-  for(int q = 0; q < 8; q++)
-    blink(vec2(q, fp), 5);
+  int row = 3;
+  int accum = 0;
+  int times = 0;
+  while(true)
+  {
+    if(times == 4)
+    {
+      run_leds(3);
+      next_level();
+      delay(750);
+      break;
+    }
+    if(check_button(true)) break;
+    float distance = get_distance();
+    float p = normalize_distance(distance);
+    float fp = floor(p*7);
+
+    if(fp == row)
+      accum++;
+
+    if(accum == 20)
+    {
+      run_leds((times++)%4);
+      run_leds((times + 1)%4);
+      accum = 0;
+      row = 1 + random(6);
+    }
+    for(int q = 0; q < 8; q++)
+    {
+      blink(vec2(q, fp), 5);
+      blink(vec2(q, row), 5);
+    }
+    }
 }
 
 void ball()
 {
-  float distance = get_distance();
-  float p = normalize_distance(distance);
-  for(int i = 0; i < 8; i++)
-  for(int j = 0; j < 8; j++)
+  while(true)
   {
-    vec2 v = get_uc(i, j);
-    if(v.length < p*4)      
-      trigger_pixel(vec2(i, j), 1);
+    if(check_button(false))
+    {
+      run_leds(0);
+      delay(750);
+      break;
     }
+    float distance = get_distance();
+    float p = normalize_distance(distance);
+    for(int i = 0; i < 8; i++)
+    for(int j = 0; j < 8; j++)
+    {
+      vec2 v = get_uc(i, j);
+      if(v.length < p*4)      
+        trigger_pixel(vec2(i, j), 1);
+      }
+  }
 }
 
 vec2 rotate(vec2 v, float a)
@@ -291,94 +343,175 @@ vec2 rotate(vec2 v, float a)
   mat2 m = mat2(cos(a), -sin(a), sin(a), cos(a));
   return m.mul(v);
 }
+
 void square()
 {
-  Square e = thesquare;
-  
-  vec2 p = vec2(0, 4);
-  e.set_position(p);
-  float a = 0.1;    
-  float cycle = 45;
-  for(int i=0; i < cycle; i++)
+  int times = 0;
+  while(true)
   {
-    float distance = get_distance();
-    float speed = normalize_distance(distance);
-
-    if(speed > .49 && speed < .51)
-      square_counter++;
+    if(check_button(true)) break;
     
-    e.set_scale(2 + (speed-.5) * 7);
-    e.set_position(p.add(vec2(8*speed, (speed-.5)*3*sin(2. * i * 3.1415/cycle) ) ) );
-    e.rotate((speed-.5)*3.1415/180);
-    if(square_counter == 100)  
+    Square e = thesquare;
+    
+    vec2 p = vec2(0, 4);
+
+    float cycle = 24;
+    for(int i=0; i < cycle; i++)
     {
-      delay(750);
-      e.draw_speed = 100;
-      square_counter = 0;
-      e.set_scale(3);
-      for(int w=0; w < 2; w++)
+      float distance = get_distance();
+      float speed = normalize_distance(distance);
+
+      if(speed > .49 && speed < .51)
+        square_counter++;
+      
+      e.set_scale(2 + (speed-.5) * 7);
+      e.set_position(p.add(vec2(8*speed, (speed-.5)*3*sin(2. * i * 3.1415/cycle) ) ) );
+      e.rotate((speed-.5)*3.1415/180);
+      if(square_counter == 100)  
       {
-        for(int q=0; q < e.get_array_size(); q++)
-          e.draw();
-        e.set_scale(e.scale-1);
         delay(750);
-      }
-      delay(750);
-      e.draw_speed = 1;
-    }else e.draw();
+        e.draw_speed = 100;
+        square_counter = 0;
+        e.set_scale(3);
+        for(int w=0; w < 2; w++)
+        {
+          for(int q=0; q < e.get_array_size(); q++)
+            e.draw();
+          e.set_scale(e.scale-1);
+          delay(750);
+        }
+        delay(750);
+        e.draw_speed = 1;
+        times++;
+        if(times==2)
+        {
+          run_leds(0);
+          next_level();
+          delay(750);
+          return;
+        }        
+      }else e.draw();
+    }
   }
-  
 }
 
 void dot()
 {
-    float distance = get_distance();
-    float speed = get_speed(distance);
-    if(__INIT__ == 0)
+  int accum = 0;
+  bool playmode=true;
+  float speed;
+
+  while(true)
+  {
+    int s_len = snake_length;
+    if(check_button(true)) break;
+    if(__DOT_INIT__ == 0)
     {
       // Generate random starting point
-      vec2 o = vec2(7*random(8.)/7., 7*random(8.)/7.);
+      vec2 o = vec2(7*random(800)/700., 7*random(800)/700.);
       origin[0] = o;
       // Generate random starting direction between [-1, -1] and [1, 1]
-      vec2 dir = vec2(-1. + random(200)/200., -1. + random(200)/200.);
-      direction = dir;
+      direction = vec2(5, 5).add(o.mul(-1));
+      direction = direction.normalize();
 
-      for(int l=0; l < snake_length-1; l++)
-        origin[l+1] = origin[l].add(dir);
+      for(int l=0; l < s_len; l++)
+        origin[l+1] = origin[l].add(direction);
 
-      __INIT__ = 1;
+      __DOT_INIT__ = 1;
     }else
     {
       vec2 o = origin[0];
       vec2 d = direction;
-
-      for(int l=0; l < snake_length; l++)
-        trigger_pixel(origin[l], 5 + speed);
-        // trigger_pixel(origin[l], l==0?5 + __SNAKE_TIMEOUT__*p:5);
-      
-      vec2 no = o.add(d);
-      if(no.x <= 0 || no.x >= 7) 
+      vec2 prev;
+      for(int l=0; l < s_len; l++)
       {
-        // switch direction from wall
-        no.x = min(7, max(0, no.x));
-        d.x *= -1;
-        d.y += (random(100)/100.) * sign(d.x);
-        d = d.normalize();
-      }
-      if(no.y <= 0 || no.y >= 7) 
-      {
-        // switch direction from wall
-        no.y = min(7, max(0, no.y));
-        d.y *= -1;
-        d.x += (random(100)/100.) * sign(d.y);
-        d = d.normalize();
-      }
-      direction = d;
-      for(int l=snake_length; l > 1; l--)
-          origin[l-1]=origin[l-2];
+        if(playmode)
+        {
+          if(l % 2 == 0)
+          {
+            float distance = get_distance();
+            speed = get_speed(distance);
+            s_len = int(snake_length * (1-speed));
+          }
+          if(l==0)
+          {
+              if(accum < 200)
+              {
+                Serial.println(accum);
+                if(speed < .5)
+                  accum++;
+                trigger_pixel(origin[0], 15+speed);
+              }else
+              {
+                playmode=false;
+                s_len = snake_length;
+              }
 
-      origin[0] = no;
+              vec2 no = o.add(d);
+              if(no.x <= 0 || no.x >= 7) 
+              {
+                // switch direction from wall
+                no.x = min(7, max(0, no.x));
+                d.x *= -1;
+                d.y += (random(100)/100.) * sign(d.x);
+                d = d.normalize();
+              }
+              if(no.y <= 0 || no.y >= 7) 
+              {
+                // switch direction from wall
+                no.y = min(7, max(0, no.y));
+                d.y *= -1;
+                d.x += (random(100)/100.) * sign(d.y);
+                d = d.normalize();
+              }
+              direction = d;
+              prev = origin[0];
+              origin[0] = no;
+          }else
+          {
+            // for(int u=0 ;u < snake_length; u++)
+            // trigger_pixel(origin[l], 5+speed);
+            // vec2 t = origin[l];
+            // origin[l] = prev;
+            // prev = t;
+          }
+        }
+        else
+        {
+          trigger_pixel(origin[l], 1);
+
+          if(l==0)
+          {
+            vec2 no = o.add(d);
+            if(no.x <= 0 || no.x >= 7) 
+            {
+              // switch direction from wall
+              no.x = min(7, max(0, no.x));
+              d.x *= -1;
+              d.y += (random(100)/100.) * sign(d.x);
+              d = d.normalize();
+            }
+            if(no.y <= 0 || no.y >= 7) 
+            {
+              // switch direction from wall
+              no.y = min(7, max(0, no.y));
+              d.y *= -1;
+              d.x += (random(100)/100.) * sign(d.y);
+              d = d.normalize();
+            }
+            direction = d;
+            prev = origin[0];
+            origin[0] = no;
+          }else
+          {
+            vec2 t = origin[l];
+            origin[l] = prev;
+            prev = t;
+          }
+        }          
+      }
     }
+  }
 }
 
 void setup()
@@ -400,17 +533,11 @@ void setup()
 
 void loop()
 {
-  int click = digitalRead(button);
-  if(!__DEBUG__ && click==1)
-  {
-    __GAME_NUM__ = (__GAME_NUM__ + 1) % 4;
-    delay(750);
-  }
   switch(__GAME_NUM__)
   {
-    case 0: level(); break;
-    case 1: dot(); break;
-    case 2: ball(); break;
-    case 3: square(); break;
+    case 0: ball(); break;
+    case 1: level(); break;
+    case 2: square(); break;
+    case 3: dot(); break;
   }
 }
